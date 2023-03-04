@@ -8,3 +8,4 @@ libtailscale.h
 /ruby/ext/libtailscale/go.mod
 /ruby/ext/libtailscale/go.sum
 /ruby/LICENSE
+/rust/target
