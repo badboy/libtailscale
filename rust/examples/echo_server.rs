@@ -11,9 +11,13 @@ fn main() {
     loop {
         let mut conn = ln.accept().unwrap();
         let mut buf = [0; 2048];
-        let nread = conn.read(&mut buf).unwrap();
-        if nread > 0 {
-            io::stdout().write_all(&buf[0..nread]).unwrap();
+        loop {
+            let nread = conn.read(&mut buf).unwrap();
+            if nread > 0 {
+                io::stdout().write_all(&buf[0..nread]).unwrap();
+            } else {
+                break;
+            }
         }
     }
 
