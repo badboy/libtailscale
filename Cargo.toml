@@ -1,2 +1,32 @@
-[workspace]
-members = ["rust"]
+[package]
+name = "libtailscale"
+version = "0.1.0"
+edition = "2021"
+license = "BSD-3-Clause"
+description = "Compile Tailscale into your program and get an entirely userspace IP address on a tailnet."
+repository = "https://github.com/badboy/libtailscale"
+
+build = "rust/build.rs"
+include = [
+  "/LICENSE",
+  "/README.md",
+  "/go.mod",
+  "/go.sum",
+  "/tailscale.go",
+  "/tailscale.c",
+  "/tailscale.h",
+  "/rust/src",
+  "/rust/examples",
+  "/rust/build.rs",
+]
+
+[lib]
+path = "rust/src/lib.rs"
+
+[dependencies]
+log = { version = "0.4.17", default-features = false }
+nix = "0.26.2"
+thiserror = "1.0.39"
+
+[dev-dependencies]
+env_logger = "0.10.0"
