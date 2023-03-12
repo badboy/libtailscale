@@ -1,6 +1,6 @@
 use std::{env, io::Write};
 
-use tsnet::{ServerBuilder, Network};
+use tsnet::{Network, ServerBuilder};
 
 fn main() {
     let target = env::args()

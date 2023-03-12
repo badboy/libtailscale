@@ -49,7 +49,9 @@
 //!     write!(conn, "This is a test of the Tailscale connection service.\n").unwrap();
 //! }
 //! ```
-#[deny(missing_docs)]
+#![deny(missing_docs)]
+#![allow(clippy::needless_doctest_main)]
+
 #[allow(non_camel_case_types, dead_code)]
 mod sys;
 
@@ -95,6 +97,7 @@ pub enum Error {
     NullInString(#[from] std::ffi::NulError),
 }
 
+/// A Result, returning either a value or an error, defaulting to the crate error.
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 /// The possible network types.
@@ -424,6 +427,10 @@ pub struct Listener {
 }
 
 impl Listener {
+    /// Accept a new incoming connection from this listener.
+    ///
+    /// This function will block the calling thread until a new connection is established.
+    /// When established, the corresponding `TcpStream` will be returned.
     pub fn accept(&self) -> Result<TcpStream, Error> {
         unsafe {
             let mut conn = 0;
@@ -434,10 +441,6 @@ impl Listener {
             );
             res.map(|_| TcpStream::from_raw_fd(conn))
         }
-    }
-
-    pub fn incoming(&mut self) -> &Self {
-        self
     }
 }
 

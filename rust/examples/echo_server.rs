@@ -4,11 +4,15 @@ use std::{
     thread,
 };
 
-use tsnet::{ServerBuilder, Network};
+use tsnet::{Network, ServerBuilder};
 
 fn main() {
     env_logger::init();
-    let ts = ServerBuilder::new().ephemeral().redirect_log().build().unwrap();
+    let ts = ServerBuilder::new()
+        .ephemeral()
+        .redirect_log()
+        .build()
+        .unwrap();
     let ln = ts.listen(Network::Tcp, ":1999").unwrap();
 
     for conn in ln {
