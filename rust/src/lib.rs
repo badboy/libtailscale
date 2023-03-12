@@ -51,6 +51,7 @@
 //! ```
 #[deny(missing_docs)]
 
+#[allow(non_camel_case_types, dead_code)]
 mod sys;
 
 use std::{
