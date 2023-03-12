@@ -13,4 +13,9 @@ fn main() {
 
     println!("cargo:rustc-link-search={outdir}");
     println!("cargo:rustc-link-lib=static=tailscale");
+
+    #[cfg(target_os = "macos")]
+    {
+        println!("cargo:rustc-flags=-l framework=CoreFoundation -l framework=Security");
+    }
 }
