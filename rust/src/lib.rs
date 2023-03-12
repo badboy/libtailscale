@@ -1,4 +1,4 @@
-mod bindings;
+mod sys;
 
 use std::{
     ffi::{c_int, CStr, CString},
@@ -8,8 +8,6 @@ use std::{
     mem::ManuallyDrop,
     os::fd::FromRawFd,
 };
-
-use bindings::*;
 
 #[derive(Debug)]
 pub struct Error(String);
@@ -31,14 +29,14 @@ impl Display for Network {
 
 pub struct Tailscale {
     /// a handle onto a Tailscale serve
-    handle: tailscale,
+    handle: sys::tailscale,
 }
 
 fn err(handle: c_int, code: c_int) -> Result<(), Error> {
     if code < 0 {
         unsafe {
             let mut errmsg: [i8; 256] = [0; 256];
-            let res = tailscale_errmsg(handle, &mut errmsg as *mut _, errmsg.len());
+            let res = sys::tailscale_errmsg(handle, &mut errmsg as *mut _, errmsg.len());
             if res != 0 {
                 panic!("tailscale_errmsg returned {res}");
             }
@@ -59,7 +57,7 @@ impl Tailscale {
     pub fn new() -> Self {
         unsafe {
             Tailscale {
-                handle: tailscale_new(),
+                handle: sys::tailscale_new(),
             }
         }
     }
@@ -71,20 +69,20 @@ impl Tailscale {
     ///
     /// See also: `up`.
     pub fn start(&self) -> Result<(), Error> {
-        unsafe { err(self.handle, tailscale_start(self.handle)) }
+        unsafe { err(self.handle, sys::tailscale_start(self.handle)) }
     }
 
     pub fn set_ephermal(&self, ephemeral: bool) -> Result<(), Error> {
         unsafe {
             err(
                 self.handle,
-                tailscale_set_ephemeral(self.handle, ephemeral as c_int),
+                sys::tailscale_set_ephemeral(self.handle, ephemeral as c_int),
             )
         }
     }
 
     pub fn up(&self) -> Result<(), Error> {
-        unsafe { err(self.handle, tailscale_up(self.handle)) }
+        unsafe { err(self.handle, sys::tailscale_up(self.handle)) }
     }
 
     pub fn listen(&self, network: Network, address: &str) -> Result<Listener, Error> {
@@ -94,7 +92,7 @@ impl Tailscale {
             let mut out = 0;
             let res = err(
                 self.handle,
-                tailscale_listen(
+                sys::tailscale_listen(
                     self.handle,
                     c_network.as_ptr(),
                     c_addr.as_ptr(),
@@ -113,14 +111,14 @@ impl Tailscale {
 impl Drop for Tailscale {
     fn drop(&mut self) {
         unsafe {
-            tailscale_close(self.handle);
+            sys::tailscale_close(self.handle);
         }
     }
 }
 
 pub struct Listener {
-    ts: tailscale,
-    handle: tailscale_listener,
+    ts: sys::tailscale,
+    handle: sys::tailscale_listener,
 }
 
 impl Listener {
@@ -128,7 +126,7 @@ impl Listener {
         unsafe {
             let mut conn = 0;
 
-            let res = err(self.ts, tailscale_accept(self.handle, &mut conn as *mut _));
+            let res = err(self.ts, sys::tailscale_accept(self.handle, &mut conn as *mut _));
             res.map(|_| Stream { handle: conn })
         }
     }
@@ -137,14 +135,14 @@ impl Listener {
 impl Drop for Listener {
     fn drop(&mut self) {
         unsafe {
-            tailscale_listener_close(self.handle);
+            sys::tailscale_listener_close(self.handle);
         }
     }
 }
 
 #[derive(Debug)]
 pub struct Stream {
-    handle: tailscale_conn,
+    handle: sys::tailscale_conn,
 }
 
 impl Drop for Stream {
