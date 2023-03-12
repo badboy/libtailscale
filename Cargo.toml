@@ -23,6 +23,14 @@ include = [
 [lib]
 path = "rust/src/lib.rs"
 
+[[example]]
+name = "echo_client"
+path = "rust/examples/echo_client.rs"
+
+[[example]]
+name = "echo_server"
+path = "rust/examples/echo_server.rs"
+
 [dependencies]
 hyper = { version = "0.14.25", optional = true, features = ["server"] }
 log = { version = "0.4.17", default-features = false }
