@@ -5,7 +5,7 @@
 //!
 //! Based on [`libtailscale`](https://github.com/tailscale/libtailscale), the C wrapper around the
 //! Tailscale Go package.
-//! See <https://pkg.go.dev/tailscale.com> for Go module docs.
+//! See <https://pkg.go.dev/tailscale.com/tsnet> for Go module docs.
 //!
 //! ## Examples
 //!
