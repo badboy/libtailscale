@@ -3,21 +3,18 @@ mod sys;
 use std::{
     ffi::{c_int, CStr, CString},
     fmt::Display,
+    fs::File,
+    io::Read,
     net::TcpStream,
     os::fd::FromRawFd,
     path::PathBuf,
+    thread,
 };
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("can't convert this from an OsString to a String, invalid unicode?")]
     CantConvertToString,
-
-    #[error("error fetching error from tsnet")]
-    FetchingErrorFromTSNet,
-
-    #[error("[unexpected] string from tsnet has invalid UTF-8: {0}")]
-    TSNetSentBadUTF8(#[from] std::string::FromUtf8Error),
 
     #[error("tsnet: {0}")]
     TSNet(String),
@@ -124,6 +121,7 @@ pub struct ServerBuilder {
     authkey: Option<String>,
     control_url: Option<String>,
     ephemeral: bool,
+    log: u8, // 0 = no change, 1 = redirect to `log`, 2 = disable
 }
 
 impl ServerBuilder {
@@ -159,12 +157,50 @@ impl ServerBuilder {
         self
     }
 
+    pub fn redirect_log(mut self) -> Self {
+        self.log = 1;
+        self
+    }
+
+    pub fn disable_log(mut self) -> Self {
+        self.log = 2;
+        self
+    }
+
     pub fn build(self) -> Result<Server> {
         let result = unsafe {
             Server {
                 handle: sys::tailscale_new(),
             }
         };
+
+        match self.log {
+            1 => {
+                let (rx, wx) = nix::unistd::pipe().unwrap();
+                let _ = thread::Builder::new()
+                    .name("libtailscale-logwriter".to_string())
+                    .spawn(move || {
+                        let mut buf = [0; 2048];
+                        let mut file = unsafe { File::from_raw_fd(rx) };
+                        loop {
+                            match file.read(&mut buf) {
+                                Ok(0) => break,
+                                Ok(n) => {
+                                    let log = String::from_utf8_lossy(&buf[0..n]);
+                                    log::info!("{}", log);
+                                }
+                                Err(err) => {
+                                    log::error!("failed to read from log pipe: {err}");
+                                    break;
+                                }
+                            }
+                        }
+                    });
+                unsafe { err(result.handle, sys::tailscale_set_logfd(result.handle, wx))? }
+            }
+            2 => unsafe { err(result.handle, sys::tailscale_set_logfd(result.handle, -1))? },
+            _ => {}
+        }
 
         if let Some(dir) = self.dir {
             let dir = dir.into_os_string();

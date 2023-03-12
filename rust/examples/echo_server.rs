@@ -7,7 +7,8 @@ use std::{
 use libtailscale::{ServerBuilder, Network};
 
 fn main() {
-    let ts = ServerBuilder::new().ephemeral().build().unwrap();
+    env_logger::init();
+    let ts = ServerBuilder::new().ephemeral().redirect_log().build().unwrap();
     let ln = ts.listen(Network::Tcp, ":1999").unwrap();
 
     for conn in ln {
@@ -26,7 +27,7 @@ fn handle_client(mut stream: TcpStream) {
     let mut buf = [0; 2048];
     loop {
         match stream.read(&mut buf) {
-            Ok(n) if n == 0 => {
+            Ok(0) => {
                 break;
             }
             Ok(n) => {
