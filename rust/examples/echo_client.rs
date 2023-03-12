@@ -1,6 +1,6 @@
 use std::{env, io::Write};
 
-use libtailscale::{ServerBuilder, Network};
+use tsnet::{ServerBuilder, Network};
 
 fn main() {
     let target = env::args()

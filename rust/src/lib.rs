@@ -13,7 +13,7 @@
 //!
 //! ```rust,no_run
 //! use std::net::TcpStream;
-//! use libtailscale::{ServerBuilder, Network};
+//! use tsnet::{ServerBuilder, Network};
 //!
 //! fn main() {
 //!     let ts = ServerBuilder::new().ephemeral().redirect_log().build().unwrap();
@@ -37,7 +37,7 @@
 //! ```rust,no_run
 //! use std::{env, io::Write};
 //!
-//! use libtailscale::{ServerBuilder, Network};
+//! use tsnet::{ServerBuilder, Network};
 //!
 //! fn main() {
 //!     let srv = ServerBuilder::new()
@@ -124,7 +124,7 @@ impl Display for Network {
 /// ## Example
 ///
 /// ```rust,no_run
-/// use libtailscale::{ServerBuilder, Network};
+/// use tsnet::{ServerBuilder, Network};
 ///
 /// let server = ServerBuilder::new().ephemeral().build().unwrap();
 /// let ln = server.listen(Network::Tcp, ":1999").unwrap();
@@ -222,7 +222,7 @@ impl Drop for Server {
 /// ## Example
 ///
 /// ```rust,no_run
-/// use libtailscale::ServerBuilder;
+/// use tsnet::ServerBuilder;
 ///
 /// let server = ServerBuilder::new().ephemeral().build().unwrap();
 /// ```
@@ -401,7 +401,7 @@ impl ServerBuilder {
 ///
 /// ```rust,no_run
 /// use std::net::TcpStream;
-/// use libtailscale::{ServerBuilder, Network, Result};
+/// use tsnet::{ServerBuilder, Network, Result};
 ///
 /// fn handle_client(stream: TcpStream) {
 ///     // ...

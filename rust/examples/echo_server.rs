@@ -4,7 +4,7 @@ use std::{
     thread,
 };
 
-use libtailscale::{ServerBuilder, Network};
+use tsnet::{ServerBuilder, Network};
 
 fn main() {
     env_logger::init();
