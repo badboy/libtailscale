@@ -1,3 +1,56 @@
+//! Compile Tailscale into your program and get an entirely userspace IP address on a tailnet.
+//!
+//! From here you can listen for other programs on your tailnet dialing you,
+//! or connect directly to other services.
+//!
+//! Based on [`libtailscale`](https://github.com/tailscale/libtailscale), the C wrapper around the
+//! Tailscale Go package.
+//! See <https://pkg.go.dev/tailscale.com> for Go module docs.
+//!
+//! ## Examples
+//!
+//! ### Server
+//!
+//! ```rust,no_run
+//! use std::net::TcpStream;
+//! use libtailscale::{ServerBuilder, Network};
+//!
+//! fn main() {
+//!     let ts = ServerBuilder::new().ephemeral().redirect_log().build().unwrap();
+//!     let ln = ts.listen(Network::Tcp, ":1999").unwrap();
+//!
+//!     for conn in ln {
+//!         match conn {
+//!             Ok(conn) => handle_client(conn),
+//!             Err(err) => panic!("{err}"),
+//!         }
+//!     }
+//! }
+//!
+//! fn handle_client(mut stream: TcpStream) {
+//!   // ...
+//! }
+//! ```
+//!
+//! ### Client
+//!
+//! ```rust,no_run
+//! use std::{env, io::Write};
+//!
+//! use libtailscale::{ServerBuilder, Network};
+//!
+//! fn main() {
+//!     let srv = ServerBuilder::new()
+//!         .ephemeral()
+//!         .build()
+//!         .unwrap();
+//!
+//!     let mut conn = srv.connect(Network::Tcp, "echo-server:1999").unwrap();
+//!     write!(conn, "This is a test of the Tailscale connection service.\n").unwrap();
+//! }
+//! ```
+#[deny(missing_docs)]
+
 mod sys;
 
 use std::{
@@ -11,26 +64,36 @@ use std::{
     thread,
 };
 
+/// Possible errors
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// Data passed in cannot be converted to a string, possibly invalid unicode.
     #[error("can't convert this from an OsString to a String, invalid unicode?")]
     CantConvertToString,
 
+    /// Errors from the underlying `libtailscale`
     #[error("tsnet: {0}")]
     TSNet(String),
 
+    /// IO errors from network handles
     #[error("io error: {0}")]
     IO(#[from] std::io::Error),
 
+    /// Data passed in contained NULL bytes.
     #[error("your string has NULL in it: {0}")]
     NullInString(#[from] std::ffi::NulError),
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
+/// The possible network types.
 #[derive(Debug)]
 pub enum Network {
+    /// TCP
     Tcp,
+    /// UDP.
+    ///
+    /// Note: UDP currently not really tested.
     Udp,
 }
 
@@ -43,8 +106,24 @@ impl Display for Network {
     }
 }
 
+/// A Tailscale node.
+///
+/// Can act as a server or client.
+///
+/// ## Example
+///
+/// ```rust,no_run
+/// use libtailscale::{ServerBuilder, Network};
+///
+/// let server = ServerBuilder::new().ephemeral().build().unwrap();
+/// let ln = server.listen(Network::Tcp, ":1999").unwrap();
+///
+/// for conn in ln {
+///   // handle connection
+/// }
+/// ```
 pub struct Server {
-    /// a handle onto a Tailscale serve
+    /// a handle onto a Tailscale server
     handle: sys::tailscale,
 }
 
@@ -67,6 +146,7 @@ fn err(handle: c_int, code: c_int) -> Result<(), Error> {
 }
 
 impl Server {
+    /// Connect to the given address over the specified network.
     pub fn connect(&self, network: Network, addr: &str) -> Result<TcpStream> {
         let mut conn: sys::tailscale_conn = 0;
         let network = CString::new(format!("{}", network)).unwrap();
@@ -83,6 +163,7 @@ impl Server {
         Ok(unsafe { TcpStream::from_raw_fd(conn) })
     }
 
+    /// Listen on the given address and network for new connections.
     pub fn listen(&self, network: Network, address: &str) -> Result<Listener, Error> {
         unsafe {
             let network = CString::new(format!("{}", network)).unwrap();
@@ -114,6 +195,17 @@ impl Drop for Server {
     }
 }
 
+/// Server factory, which can be used to configure the properties of a new server.
+///
+/// Methods can be chained on it in order to configure it.
+///
+/// ## Example
+///
+/// ```rust,no_run
+/// use libtailscale::ServerBuilder;
+///
+/// let server = ServerBuilder::new().ephemeral().build().unwrap();
+/// ```
 #[derive(Default)]
 pub struct ServerBuilder {
     dir: Option<PathBuf>,
@@ -125,48 +217,70 @@ pub struct ServerBuilder {
 }
 
 impl ServerBuilder {
-    /// Creates a server builder.
+    /// Generates the base configuration for a new server, from which configuration methods can be chained.
     ///
     /// Call [`ServerBuilder::build`] to start the server.
     pub fn new() -> ServerBuilder {
         ServerBuilder::default()
     }
 
+    /// Specifies the name of the directory to use for state.
+    /// If unset, a directory is selected automatically under the user's configuration directory
+    /// (see <https://golang.org/pkg/os/#UserConfigDir>), based on the name of the binary.
     pub fn dir(mut self, dir: PathBuf) -> Self {
         self.dir = Some(dir);
         self
     }
 
+    /// The hostname to present to the control server.
+    /// If unset, the binary name is used.
     pub fn hostname(mut self, hostname: &str) -> Self {
         self.hostname = Some(hostname.to_owned());
         self
     }
 
+    /// AuthKey, if set, is the auth key to create the node
+    /// and will be preferred over the `TS_AUTHKEY` environment variable.
+    /// If the node is already created (from state previously stored in in Store),
+    /// then this field is not used.
     pub fn authkey(mut self, authkey: String) -> Self {
         self.authkey = Some(authkey);
         self
     }
 
+    /// Specifies the coordination server URL.
+    /// If unset, the Tailscale default is used.
     pub fn control_url(mut self, control_url: String) -> Self {
         self.control_url = Some(control_url);
         self
     }
 
+    /// Specifies that the instance should register as an Ephemeral node
+    /// (see <https://tailscale.com/kb/1111/ephemeral-nodes/>)
     pub fn ephemeral(mut self) -> Self {
         self.ephemeral = true;
         self
     }
 
+    /// Redirect `libtailscale` logging to `log`.
+    ///
+    /// * This starts a new thread to handle logs.
+    /// * Everything from `libtailscale` is logged at `INFO` level.
+    /// * Use an appropriate logger to handle log output further.
     pub fn redirect_log(mut self) -> Self {
         self.log = 1;
         self
     }
 
+    /// Disable `libtailscale` logging.
+    ///
+    /// See also [`ServerBuilder::redirect_log`] to rely on the Rust `log` facade.
     pub fn disable_log(mut self) -> Self {
         self.log = 2;
         self
     }
 
+    /// Start the server using the configured options.
     pub fn build(self) -> Result<Server> {
         let result = unsafe {
             Server {
@@ -257,6 +371,33 @@ impl ServerBuilder {
     }
 }
 
+/// A server, listening for connections.
+///
+/// After creating a server by binding it to a socket address,
+/// it listens for incoming connections.
+/// These can be accepted by calling accept or by iterating over the Incoming iterator returned by incoming.
+///
+/// ## Examples
+///
+/// ```rust,no_run
+/// use std::net::TcpStream;
+/// use libtailscale::{ServerBuilder, Network, Result};
+///
+/// fn handle_client(stream: TcpStream) {
+///     // ...
+/// }
+///
+/// fn main() -> Result<()> {
+///   let ts = ServerBuilder::new().ephemeral().redirect_log().build().unwrap();
+///   let mut listener = ts.listen(Network::Tcp, ":1999").unwrap();
+///
+///   // accept connections and process them serially
+///   for stream in listener.incoming() {
+///         handle_client(stream?);
+///   }
+///   Ok(())
+/// }
+/// ```
 pub struct Listener {
     ts: sys::tailscale,
     handle: sys::tailscale_listener,
@@ -289,6 +430,13 @@ impl Drop for Listener {
 }
 
 impl Iterator for Listener {
+    type Item = Result<TcpStream>;
+    fn next(&mut self) -> Option<Result<TcpStream>> {
+        Some(self.accept())
+    }
+}
+
+impl Iterator for &Listener {
     type Item = Result<TcpStream>;
     fn next(&mut self) -> Option<Result<TcpStream>> {
         Some(self.accept())
