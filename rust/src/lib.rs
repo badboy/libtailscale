@@ -50,7 +50,6 @@
 //! }
 //! ```
 #[deny(missing_docs)]
-
 #[allow(non_camel_case_types, dead_code)]
 mod sys;
 
@@ -64,6 +63,17 @@ use std::{
     path::PathBuf,
     thread,
 };
+#[cfg(feature = "tokio")]
+use std::{
+    future::Future,
+    pin::Pin,
+    task::{Context, Poll},
+};
+
+#[cfg(feature = "tokio")]
+use hyper::server::accept::Accept;
+#[cfg(feature = "tokio")]
+use tokio::{net, task};
 
 /// Possible errors
 #[derive(Debug, thiserror::Error)]
@@ -185,6 +195,15 @@ impl Server {
                 handle: out,
             })
         }
+    }
+
+    #[cfg(feature = "tokio")]
+    pub fn listen_async(&self, network: Network, address: &str) -> Result<AsyncListener, Error> {
+        let ls = self.listen(network, address)?;
+        Ok(AsyncListener {
+            listener: ls,
+            fut: None,
+        })
     }
 }
 
@@ -441,5 +460,48 @@ impl Iterator for &Listener {
     type Item = Result<TcpStream>;
     fn next(&mut self) -> Option<Result<TcpStream>> {
         Some(self.accept())
+    }
+}
+
+#[cfg(feature = "tokio")]
+pub struct AsyncListener {
+    listener: Listener,
+    fut: Option<task::JoinHandle<Result<net::TcpStream>>>,
+}
+
+#[cfg(feature = "tokio")]
+impl Accept for AsyncListener {
+    type Conn = net::TcpStream;
+    type Error = Error;
+
+    fn poll_accept(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<Self::Conn, Self::Error>>> {
+        if self.fut.is_none() {
+            let ts = self.listener.handle;
+            self.fut = Some(task::spawn_blocking(move || unsafe {
+                let mut conn = 0;
+
+                let res = err(ts, sys::tailscale_accept(ts, &mut conn as *mut _));
+                res.map(|_| {
+                    let stream = TcpStream::from_raw_fd(conn);
+                    let _ = stream.set_nonblocking(true);
+                    net::TcpStream::from_std(stream).unwrap()
+                })
+            }));
+        }
+
+        let mut fut = self.fut.take().unwrap();
+        let fut_pl = Pin::new(&mut fut);
+        let stream = match fut_pl.poll(cx) {
+            Poll::Ready(t) => t,
+            Poll::Pending => {
+                self.fut = Some(fut);
+                return Poll::Pending;
+            }
+        };
+
+        Poll::Ready(Some(stream.unwrap()))
     }
 }
