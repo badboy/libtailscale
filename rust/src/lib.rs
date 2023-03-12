@@ -415,7 +415,7 @@ impl ServerBuilder {
 ///   let mut listener = ts.listen(Network::Tcp, ":1999").unwrap();
 ///
 ///   // accept connections and process them serially
-///   for stream in listener.incoming() {
+///   for stream in listener {
 ///         handle_client(stream?);
 ///   }
 ///   Ok(())
